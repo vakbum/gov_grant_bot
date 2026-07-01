@@ -35,7 +35,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 KSTARTUP_API_KEY = os.environ.get("KSTARTUP_API_KEY", "")
-BIZINFO_API_KEY = os.environ.get("BIZINFO_API_KEY", BIZINFO_API_KEY)
+BIZINFO_API_KEY = os.environ.get("BIZINFO_API_KEY", "")
 
 # 로컬 테스트용 환경변수 처리
 if not GEMINI_API_KEY and os.path.exists(".env"):
@@ -45,7 +45,7 @@ if not GEMINI_API_KEY and os.path.exists(".env"):
     TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", TELEGRAM_CHAT_ID)
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", GEMINI_API_KEY)
     KSTARTUP_API_KEY = os.environ.get("KSTARTUP_API_KEY", KSTARTUP_API_KEY)
-    BIZINFO_API_KEY = os.environ.get("BIZINFO_API_KEY", BIZINFO_API_KEY)
+    BIZINFO_API_KEY = os.environ.get("BIZINFO_API_KEY", "")
 
 SEEN_FILE = "seen.json"
 
