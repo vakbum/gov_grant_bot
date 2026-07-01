@@ -18,6 +18,7 @@ import sys
 import json
 import re
 import hashlib
+import time
 import requests
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
@@ -373,7 +374,7 @@ def evaluate_matching_with_gemini(title):
         return json.loads(clean_text)
     except Exception as e:
         print(f"[Gemini API] 분석 에러: {e}")
-        return {"is_matched": True, "score": 3, "reason": f"AI 분석 장애 발생 (에러: {e}). 원문 발송합니다."}
+        return {"is_matched": True, "score": 4, "reason": f"AI 분석 장애 발생 (에러: {e}). 원문 발송합니다."}
 
 def send_telegram(title, source, link, score, reason):
     """최종 매칭된 알림을 텔레그램으로 즉시 전송합니다."""
@@ -439,6 +440,9 @@ def main():
                 
             # 2차 필터링: Gemini LLM 자격 검증
             evaluation = evaluate_matching_with_gemini(title)
+            
+            # Gemini API 무료티어 속도제한(10 RPM) 대응 - 6초 대기
+            time.sleep(6)
             
             if evaluation.get("is_matched") and evaluation.get("score", 0) >= 4:
                 send_telegram(
