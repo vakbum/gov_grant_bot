@@ -1,0 +1,46 @@
+name: gov-grant-bot
+
+on:
+  schedule:
+    # UTC 기준 - 한국시간(KST=UTC+9) 오전 9시, 오후 6시
+    - cron: "0 0 * * *"   # KST 09:00
+    - cron: "0 9 * * *"   # KST 18:00
+  workflow_dispatch: {}   # Actions 탭에서 수동 실행 버튼도 생김
+
+permissions:
+  contents: write   # seen.json 커밋하려면 필요
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 패키지 설치
+        run: |
+          pip install requests beautifulsoup4 playwright google-generativeai
+          playwright install --with-deps chromium
+
+      - name: 봇 실행
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          KSTARTUP_API_KEY: ${{ secrets.KSTARTUP_API_KEY }}
+          BIZINFO_API_KEY: ${{ secrets.BIZINFO_API_KEY }}
+        run: python bot.py
+
+      - name: 상태 파일(seen.json) 커밋
+        run: |
+          git config user.name "gov-grant-bot"
+          git config user.email "actions@github.com"
+          git add seen.json
+          git diff --staged --quiet || git commit -m "update seen.json [skip ci]"
+          git push
