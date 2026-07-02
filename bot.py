@@ -367,7 +367,7 @@ def evaluate_matching_with_gemini(title):
     if not GEMINI_API_KEY:
         return {"is_matched": True, "score": 3, "reason": "Gemini API 키가 입력되지 않아 기본 검증으로 우회 전송합니다."}
         
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
     
     prompt = f"""
     당신은 박섬천 대표님의 1:1 맞춤 창업 기획자입니다.
