@@ -57,6 +57,36 @@ KEYWORDS = [
     "인턴", "일자리", "공모전", "영화제", "광고", "디렉터", "크리에이터"
 ]
 
+EXCLUDE_REGIONS = [
+    "충남", "충청", "전북", "전남", "전라", "경북", "경남", "경상", 
+    "부산", "대구", "대전", "광주", "인천", "서울", "경기", "강원", "제주", "세종"
+]
+
+EXCLUDE_KEYWORDS = [
+    "시니어", "노인", "실버", "어르신", "5060", "중장년", "퇴직자", "고령",
+    "평가위원", "심사위원", "평가 위원", "심사 위원", "후보자", "자문위원", "전문가", "풀",
+    "반려동물", "애완", "반려견", "반려묘", "댕댕", "냥이",
+    "농업", "농축", "임업", "어업", "수산", "축산", "농식품"
+]
+
+def is_valid_notice(title):
+    """제목의 지역명과 차단 키워드를 1차로 필터링합니다."""
+    # 1. 제외 키워드 매칭
+    for ex_kw in EXCLUDE_KEYWORDS:
+        if ex_kw.lower() in title.lower():
+            print(f"[Filter] 제외 키워드 매칭으로 제외: '{title}' (매칭 키워드: {ex_kw})")
+            return False
+            
+    # 2. 타 지역 제한 (단, '울산'이 함께 들어가면 울산 연계로 간주하여 수집 허용)
+    for ex_reg in EXCLUDE_REGIONS:
+        if ex_reg.lower() in title.lower():
+            if "울산" not in title:
+                print(f"[Filter] 타 지역 제한으로 제외: '{title}' (매칭 지역: {ex_reg})")
+                return False
+                
+    return True
+
+
 # 대표님 및 기업 상세 자격 프로필 (AI 판단 기준)
 USER_PROFILE = """
 - 대표자 연령: 만 39세 이하 (1988년생)
@@ -358,23 +388,44 @@ def evaluate_matching_with_gemini(title):
     }}
     """
     
-    try:
-        res = requests.post(
-            url, 
-            json={"contents": [{"parts": [{"text": prompt}]}]}, 
-            headers={"Content-Type": "application/json"},
-            timeout=15
-        )
-        res.raise_for_status()
-        response_data = res.json()
-        raw_text = response_data["candidates"][0]["content"]["parts"][0]["text"].strip()
-        clean_text = re.sub(r"^```json\s*", "", raw_text, flags=re.IGNORECASE)
-        clean_text = re.sub(r"\s*```$", "", clean_text, flags=re.IGNORECASE).strip()
-        
-        return json.loads(clean_text)
-    except Exception as e:
-        print(f"[Gemini API] 분석 에러: {e}")
-        return {"is_matched": True, "score": 4, "reason": f"AI 분석 장애 발생 (에러: {e}). 원문 발송합니다."}
+    max_retries = 3
+    retry_delay = 5
+    
+    for attempt in range(max_retries):
+        try:
+            res = requests.post(
+                url, 
+                json={"contents": [{"parts": [{"text": prompt}]}]}, 
+                headers={"Content-Type": "application/json"},
+                timeout=15
+            )
+            
+            # Rate Limit (429) 처리
+            if res.status_code == 429:
+                print(f"[Gemini API] 429 속도제한 감지 (시도 {attempt+1}/{max_retries}). {retry_delay}초 대기 후 재시도...")
+                time.sleep(retry_delay)
+                retry_delay *= 2
+                continue
+                
+            res.raise_for_status()
+            response_data = res.json()
+            raw_text = response_data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            clean_text = re.sub(r"^```json\s*", "", raw_text, flags=re.IGNORECASE)
+            clean_text = re.sub(r"\s*```$", "", clean_text, flags=re.IGNORECASE).strip()
+            
+            return json.loads(clean_text)
+            
+        except Exception as e:
+            if attempt == max_retries - 1:
+                print(f"[Gemini API] 최종 분석 실패: {e}")
+                # AI 분석 장애 발생 시, 대표님 채널에서 에러 URL을 보지 않도록 깔끔하게 예외 처리
+                error_msg = str(e).split("?key=")[0]  # API Key 노출 방지
+                return {"is_matched": True, "score": 4, "reason": f"AI 분석 일시 장애 발생 (에러: {error_msg}). 원문 전송합니다."}
+            else:
+                print(f"[Gemini API] 오류 발생 (시도 {attempt+1}/{max_retries}): {e}. {retry_delay}초 후 재시도...")
+                time.sleep(retry_delay)
+                retry_delay *= 2
+
 
 def send_telegram(title, source, link, score, reason):
     """최종 매칭된 알림을 텔레그램으로 즉시 전송합니다."""
@@ -436,6 +487,10 @@ def main():
             title = item["title"]
             is_matched_kw = any(kw.lower() in title.lower() for kw in KEYWORDS)
             if not is_matched_kw:
+                continue
+                
+            # 1.5차 필터링: 스마트 지역 제한 및 차단 키워드 필터링
+            if not is_valid_notice(title):
                 continue
                 
             # 2차 필터링: Gemini LLM 자격 검증
