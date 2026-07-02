@@ -426,6 +426,9 @@ def evaluate_matching_with_gemini(title):
                 time.sleep(retry_delay)
                 retry_delay *= 2
 
+    # 모든 시도가 실패하거나 429로 루프가 종료된 경우의 최종 백업 반환
+    return {"is_matched": True, "score": 4, "reason": "AI 분석 호출 제한 초과로 임시 수집 허용 (429 Rate Limit). 원문 전송합니다."}
+
 
 def send_telegram(title, source, link, score, reason):
     """최종 매칭된 알림을 텔레그램으로 즉시 전송합니다."""
