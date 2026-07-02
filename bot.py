@@ -361,6 +361,59 @@ def fetch_ccei():
         print(f"[ccei] 크롤링 에러: {e}")
         return []
 
+def fetch_spobiz():
+    """국민체육진흥공단 스포츠산업지원(SPOBIZ) 지원사업 공고 수집"""
+    url = "https://spobiz.kspo.or.kr/front/sportsHistory/sportsBissMng/sportsBissNoticeList.do?topMenuSeq=1"
+    try:
+        html = render_html(url, wait_until="networkidle")
+        soup = BeautifulSoup(html, "html.parser")
+        
+        tables = soup.find_all("table")
+        if not tables or len(tables) < 2:
+            print("[SPOBIZ] 공고 테이블을 찾을 수 없습니다.")
+            return []
+            
+        table = tables[1]
+        rows = table.find_all("tr")
+        results = []
+        
+        for row in rows[1:]:
+            cells = row.find_all("td")
+            if len(cells) < 4:
+                continue
+                
+            title_el = cells[2]
+            title = title_el.get_text().strip().replace("\n", " ").replace("\t", "")
+            title = " ".join(title.split())
+            
+            onclick_html = str(row)
+            seq_match = re.search(r"fn_noticeView\('(\d+)'\)", onclick_html)
+            if not seq_match:
+                a_tag = row.find("a", href=True)
+                if a_tag:
+                    seq_match = re.search(r"fn_noticeView\('(\d+)'\)", a_tag["href"])
+                    
+            if seq_match:
+                seq = seq_match.group(1)
+                link = f"https://spobiz.kspo.or.kr/front/sportsHistory/sportsBissMng/sportsBissNoticeDetail.do?suppBusiInfoSeq={seq}"
+                uid = f"spobiz_{seq}"
+            else:
+                link = url
+                uid = hashlib.md5(title.encode("utf-8")).hexdigest()
+                
+            results.append({
+                "uid": uid,
+                "title": title,
+                "url": link,
+                "source": "스포츠산업지원(SPOBIZ)"
+            })
+            
+        return results
+    except Exception as e:
+        print(f"[SPOBIZ] 크롤링 에러: {e}")
+        return []
+
+
 # ── AI 필터링 및 텔레그램 연동 ────────────────────────────────
 def evaluate_matching_with_gemini(title):
     """Gemini API를 활용하여 대표자 맞춤 자격 검증 및 짧은 1줄 코멘트 작성"""
@@ -468,7 +521,8 @@ def main():
         "울산문화관광재단": fetch_uctf,
         "울산정보산업진흥원": fetch_uipa,
         "울산콘텐츠코리아랩": fetch_uckl,
-        "울산창조경제혁신센터": fetch_ccei
+        "울산창조경제혁신센터": fetch_ccei,
+        "스포츠산업지원(SPOBIZ)": fetch_spobiz
     }
     
     for source_name, fetch_func in sources.items():
