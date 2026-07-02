@@ -388,8 +388,8 @@ def evaluate_matching_with_gemini(title):
     }}
     """
     
-    max_retries = 3
-    retry_delay = 5
+    max_retries = 2
+    retry_delay = 3
     
     for attempt in range(max_retries):
         try:
