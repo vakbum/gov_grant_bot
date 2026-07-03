@@ -62,22 +62,9 @@ EXCLUDE_REGIONS = [
     "부산", "대구", "대전", "광주", "인천", "서울", "경기", "강원", "제주", "세종"
 ]
 
-EXCLUDE_KEYWORDS = [
-    "시니어", "노인", "실버", "어르신", "5060", "중장년", "퇴직자", "고령",
-    "평가위원", "심사위원", "평가 위원", "심사 위원", "후보자", "자문위원", "전문가", "풀",
-    "반려동물", "애완", "반려견", "반려묘", "댕댕", "냥이",
-    "농업", "농축", "임업", "어업", "수산", "축산", "농식품"
-]
-
 def is_valid_notice(title):
-    """제목의 지역명과 차단 키워드를 1차로 필터링합니다."""
-    # 1. 제외 키워드 매칭
-    for ex_kw in EXCLUDE_KEYWORDS:
-        if ex_kw.lower() in title.lower():
-            print(f"[Filter] 제외 키워드 매칭으로 제외: '{title}' (매칭 키워드: {ex_kw})")
-            return False
-            
-    # 2. 타 지역 제한 (단, '울산'이 함께 들어가면 울산 연계로 간주하여 수집 허용)
+    """제목의 타 지역 제한명을 1차로 필터링합니다."""
+    # 타 지역 제한 (단, '울산'이 함께 들어가면 울산 연계로 간주하여 수집 허용)
     for ex_reg in EXCLUDE_REGIONS:
         if ex_reg.lower() in title.lower():
             if "울산" not in title:
@@ -86,15 +73,6 @@ def is_valid_notice(title):
                 
     return True
 
-
-# 대표님 및 기업 상세 자격 프로필 (AI 판단 기준)
-USER_PROFILE = """
-- 대표자 연령: 만 39세 이하 (1988년생)
-- 기업 업력: 창업 3년 이내 (초기창업자)
-- 소재지: 울산광역시
-- 희망/집중 분야: 문화 콘텐츠, AI 기술 융합 영상 및 IT 기획, 하드웨어 융합형 미디어 기기/굿즈, 스포츠 및 관광 레저 서비스, 소상공인 실질 자금 지원, 청년 인턴쉽 및 창업 체험
-- 비대상 사업: 농축수산업 전용 지원, 수도권(서울/경기) 관내 거주자 한정 공모전, 단순 제조 공장 지원사업
-"""
 
 # ── 상태 저장 및 파일 I/O 관리 ─────────────────────────────
 def load_seen():
@@ -415,100 +393,63 @@ def fetch_spobiz():
 
 
 # ── AI 필터링 및 텔레그램 연동 ────────────────────────────────
-def evaluate_matching_with_gemini(title):
-    """Gemini API를 활용하여 대표자 맞춤 자격 검증 및 짧은 1줄 코멘트 작성"""
-    if not GEMINI_API_KEY:
-        return {"is_matched": True, "score": 3, "reason": "Gemini API 키가 입력되지 않아 기본 검증으로 우회 전송합니다."}
-        
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-    
-    prompt = f"""
-    당신은 박섬천 대표님의 1:1 맞춤 창업 기획자입니다.
-    아래 [공고 제목]을 보고 [대표자 프로필]과 비교하여 지원 타당성을 정밀 분석하십시오.
-    
-    [대표자 프로필]
-    {USER_PROFILE}
-    
-    [공고 제목]
-    {title}
-    
-    [작성 규칙]
-    반드시 마크다운 기호(예: ```json 등)를 붙이지 말고, 순수한 JSON 객체 텍스트로만 응답하십시오.
-    {{
-        "is_matched": true/false (기본 연령/업력/지역 조건을 통과하고 콘텐츠/영상/관광/체육/인턴십/소상공인 도메인에 연관이 높은 경우만 true),
-        "score": 1~5 (대표님의 사업 방향성과의 결합도 점수),
-        "reason": "해당 사업이 박섬천 대표에게 적합한 이유 또는 부족한 요건 분석 1줄 설명"
-    }}
-    """
-    
-    max_retries = 2
-    retry_delay = 3
-    
-    for attempt in range(max_retries):
-        try:
-            res = requests.post(
-                url, 
-                json={"contents": [{"parts": [{"text": prompt}]}]}, 
-                headers={"Content-Type": "application/json"},
-                timeout=15
-            )
-            
-            # Rate Limit (429) 처리
-            if res.status_code == 429:
-                print(f"[Gemini API] 429 속도제한 감지 (시도 {attempt+1}/{max_retries}). {retry_delay}초 대기 후 재시도...")
-                time.sleep(retry_delay)
-                retry_delay *= 2
-                continue
-                
-            res.raise_for_status()
-            response_data = res.json()
-            raw_text = response_data["candidates"][0]["content"]["parts"][0]["text"].strip()
-            clean_text = re.sub(r"^```json\s*", "", raw_text, flags=re.IGNORECASE)
-            clean_text = re.sub(r"\s*```$", "", clean_text, flags=re.IGNORECASE).strip()
-            
-            return json.loads(clean_text)
-            
-        except Exception as e:
-            if attempt == max_retries - 1:
-                print(f"[Gemini API] 최종 분석 실패: {e}")
-                # AI 분석 장애 발생 시, 대표님 채널에서 에러 URL을 보지 않도록 깔끔하게 예외 처리
-                error_msg = str(e).split("?key=")[0]  # API Key 노출 방지
-                return {"is_matched": True, "score": 4, "reason": f"AI 분석 일시 장애 발생 (에러: {error_msg}). 원문 전송합니다."}
-            else:
-                print(f"[Gemini API] 오류 발생 (시도 {attempt+1}/{max_retries}): {e}. {retry_delay}초 후 재시도...")
-                time.sleep(retry_delay)
-                retry_delay *= 2
-
-    # 모든 시도가 실패하거나 429로 루프가 종료된 경우의 최종 백업 반환
-    return {"is_matched": True, "score": 4, "reason": "AI 분석 호출 제한 초과로 임시 수집 허용 (429 Rate Limit). 원문 전송합니다."}
-
-
-def send_telegram(title, source, link, score, reason):
-    """최종 매칭된 알림을 텔레그램으로 즉시 전송합니다."""
+def send_aggregated_telegram(aggregated_notices):
+    """기관별로 공고를 묶어 텔레그램으로 전송합니다."""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print(f"[Telegram] 미설정 - 콘솔 출력:\n[{source}] {title} (매칭도: {score})\n의견: {reason}\n이동: {link}")
+        print("\n[Telegram] 미설정 - 콘솔 출력 취합 목록:")
+        for source, items in aggregated_notices.items():
+            print(f"\n[{source}]")
+            for idx, item in enumerate(items):
+                print(f"  {idx+1}. {item['title']} (기간: {item.get('date', '확인불가')}) - {item['url']}")
         return
         
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     
-    message = (
-        f"📢 <b>[{source} 신규 공고 알림]</b>\n\n"
-        f"📌 <b>공고명</b>: {title}\n"
-        f"⭐️ <b>추천 매칭도</b>: {score} / 5\n"
-        f"💡 <b>컨설턴트 의견</b>: {reason}\n\n"
-        f"🔗 <a href='{link}'>상세 정보 및 공고 바로가기</a>"
-    )
+    lines = ["📢 <b>[정부지원사업 신규 공고 통합 알림]</b>\n"]
     
-    try:
-        res = requests.post(url, data={
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": message,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": False
-        }, timeout=10)
-        res.raise_for_status()
-    except Exception as e:
-        print(f"[Telegram] 발송 실패: {e}")
+    for source, items in aggregated_notices.items():
+        lines.append(f"🏢 <b>{source}</b>")
+        for idx, item in enumerate(items):
+            title = item["title"]
+            date_str = f" ({item['date']})" if item.get("date") else ""
+            lines.append(f"  {idx+1}. {title}{date_str} <a href='{item['url']}'>[이동]</a>")
+        lines.append("")
+        
+    message = "\n".join(lines).strip()
+    
+    # 텔레그램 메시지 길이 제한(4096자) 안전 마진 분할 처리
+    if len(message) > 4000:
+        chunks = []
+        current_chunk = ["📢 <b>[정부지원사업 신규 공고 통합 알림 (분할)]</b>\n"]
+        for source, items in aggregated_notices.items():
+            source_lines = [f"🏢 <b>{source}</b>"]
+            for idx, item in enumerate(items):
+                title = item["title"]
+                date_str = f" ({item['date']})" if item.get("date") else ""
+                source_lines.append(f"  {idx+1}. {title}{date_str} <a href='{item['url']}'>[이동]</a>")
+            source_lines.append("")
+            
+            if len("\n".join(current_chunk)) + len("\n".join(source_lines)) > 4000:
+                chunks.append("\n".join(current_chunk))
+                current_chunk = ["📢 <b>[정부지원사업 신규 공고 통합 알림 (분할)]</b>\n"] + source_lines
+            else:
+                current_chunk.extend(source_lines)
+        chunks.append("\n".join(current_chunk))
+    else:
+        chunks = [message]
+        
+    for chunk in chunks:
+        try:
+            res = requests.post(url, data={
+                "chat_id": TELEGRAM_CHAT_ID,
+                "text": chunk,
+                "parse_mode": "HTML",
+                "disable_web_page_preview": True
+            }, timeout=15)
+            res.raise_for_status()
+        except Exception as e:
+            print(f"[Telegram] 발송 실패: {e}")
+
 
 # ── 메인 파이프라인 제어 ────────────────────────────────────
 def main():
@@ -525,6 +466,8 @@ def main():
         "스포츠산업지원(SPOBIZ)": fetch_spobiz
     }
     
+    aggregated_notices = {}
+    
     for source_name, fetch_func in sources.items():
         print(f"\n[🚀] {source_name} 수집을 시작합니다...")
         try:
@@ -534,6 +477,8 @@ def main():
             continue
             
         print(f"-> {len(items)}건의 공고를 감지했습니다.")
+        source_matched_items = []
+        
         for item in items:
             uid = item["uid"]
             if uid in seen:
@@ -546,26 +491,23 @@ def main():
             if not is_matched_kw:
                 continue
                 
-            # 1.5차 필터링: 스마트 지역 제한 및 차단 키워드 필터링
+            # 2차 필터링: 스마트 지역 제한 필터링
             if not is_valid_notice(title):
                 continue
                 
-            # 2차 필터링: Gemini LLM 자격 검증
-            evaluation = evaluate_matching_with_gemini(title)
+            source_matched_items.append(item)
             
-            # Gemini API 무료티어 속도제한(10 RPM) 대응 - 6초 대기
-            time.sleep(6)
-            
-            if evaluation.get("is_matched") and evaluation.get("score", 0) >= 4:
-                send_telegram(
-                    title=title,
-                    source=item["source"],
-                    link=item["url"],
-                    score=evaluation["score"],
-                    reason=evaluation["reason"]
-                )
+        if source_matched_items:
+            for matched_item in source_matched_items:
+                src = matched_item["source"]
+                if src not in aggregated_notices:
+                    aggregated_notices[src] = []
+                aggregated_notices[src].append(matched_item)
                 new_alerts += 1
                 
+    if aggregated_notices:
+        send_aggregated_telegram(aggregated_notices)
+        
     save_seen(seen)
     print(f"\n[🏁] 완료: 새 알림 {new_alerts}건 발송, 누적 수집 기록 {len(seen)}건")
 
