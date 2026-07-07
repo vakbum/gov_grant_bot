@@ -62,6 +62,11 @@ EXCLUDE_REGIONS = [
     "부산", "대구", "대전", "광주", "인천", "서울", "경기", "강원", "제주", "세종"
 ]
 
+CONTRACT_KEYWORDS = [
+    "영상", "홍보", "광고", "콘텐츠", "유튜브", "중계", "행사", 
+    "촬영", "크리에이터", "미디어", "방송", "디자인", "편집", "제작"
+]
+
 def is_valid_notice(title):
     """제목의 타 지역 제한명을 1차로 필터링합니다."""
     # 타 지역 제한 (단, '울산'이 함께 들어가면 울산 연계로 간주하여 수집 허용)
@@ -392,6 +397,67 @@ def fetch_spobiz():
         return []
 
 
+def fetch_contract_portal(url, source_name):
+    """울산광역시 및 울주군 계약정보시스템 용역 입찰공고 수집"""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Encoding": "identity"
+    }
+    try:
+        res = requests.get(url, headers=headers, timeout=15, verify=False)
+        res.raise_for_status()
+        
+        soup = BeautifulSoup(res.text, "html.parser")
+        tables = soup.find_all("table")
+        if not tables or len(tables) < 2:
+            print(f"[{source_name}] 입찰 테이블을 찾을 수 없습니다.")
+            return []
+            
+        table = tables[1]
+        rows = table.find_all("tr")
+        results = []
+        
+        for row in rows[1:]:
+            cells = row.find_all("td")
+            if len(cells) < 4:
+                continue
+                
+            title_cell = cells[1]
+            title = title_cell.get_text().strip().replace("\n", " ").replace("\t", "")
+            title = " ".join(title.split())
+            
+            a_tag = title_cell.find("a", href=True)
+            link = a_tag["href"] if a_tag else url
+            if link and not link.startswith("http"):
+                link = urljoin(url, link)
+                
+            bid_id = cells[2].get_text().strip()
+            date = cells[3].get_text().strip()
+            agency = cells[4].get_text().strip()
+            
+            uid = f"contract_{source_name}_{bid_id}" if bid_id else hashlib.md5(title.encode("utf-8")).hexdigest()
+            
+            results.append({
+                "uid": uid,
+                "title": title,
+                "url": link,
+                "source": f"{source_name} ({agency})",
+                "date": date,
+                "is_contract": True
+            })
+            
+        return results
+    except Exception as e:
+        print(f"[{source_name}] 크롤링 에러: {e}")
+        return []
+
+def fetch_ulsan_city_contracts():
+    return fetch_contract_portal("https://contract.ulsan.go.kr/contract/bid/announcement/service", "울산시청 용역입찰")
+
+def fetch_ulju_contracts():
+    return fetch_contract_portal("https://contract.ulju.ulsan.kr/contract/bid/announcement/service", "울주군청 용역입찰")
+
+
 # ── AI 필터링 및 텔레그램 연동 ────────────────────────────────
 def send_aggregated_telegram(aggregated_notices):
     """기관별로 공고를 묶어 텔레그램으로 전송합니다."""
@@ -463,7 +529,9 @@ def main():
         "울산정보산업진흥원": fetch_uipa,
         "울산콘텐츠코리아랩": fetch_uckl,
         "울산창조경제혁신센터": fetch_ccei,
-        "스포츠산업지원(SPOBIZ)": fetch_spobiz
+        "스포츠산업지원(SPOBIZ)": fetch_spobiz,
+        "울산시청 용역입찰": fetch_ulsan_city_contracts,
+        "울주군청 용역입찰": fetch_ulju_contracts
     }
     
     aggregated_notices = {}
@@ -485,9 +553,13 @@ def main():
                 continue
             seen.add(uid)
             
-            # 1차 필터링: 제목 키워드 비교
+            # 1차 필터링: 제목 키워드 비교 (용역 계약인지 일반 지원사업인지 구분)
             title = item["title"]
-            is_matched_kw = any(kw.lower() in title.lower() for kw in KEYWORDS)
+            if item.get("is_contract", False):
+                is_matched_kw = any(kw.lower() in title.lower() for kw in CONTRACT_KEYWORDS)
+            else:
+                is_matched_kw = any(kw.lower() in title.lower() for kw in KEYWORDS)
+                
             if not is_matched_kw:
                 continue
                 
