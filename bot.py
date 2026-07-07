@@ -476,7 +476,7 @@ def send_aggregated_telegram(aggregated_notices):
     for source, items in aggregated_notices.items():
         lines.append(f"🏢 <b>{source}</b>")
         for idx, item in enumerate(items):
-            title = item["title"]
+            title = item["title"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             date_str = f" ({item['date']})" if item.get("date") else ""
             lines.append(f"  {idx+1}. {title}{date_str} <a href='{item['url']}'>[이동]</a>")
         lines.append("")
@@ -490,7 +490,7 @@ def send_aggregated_telegram(aggregated_notices):
         for source, items in aggregated_notices.items():
             source_lines = [f"🏢 <b>{source}</b>"]
             for idx, item in enumerate(items):
-                title = item["title"]
+                title = item["title"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                 date_str = f" ({item['date']})" if item.get("date") else ""
                 source_lines.append(f"  {idx+1}. {title}{date_str} <a href='{item['url']}'>[이동]</a>")
             source_lines.append("")
