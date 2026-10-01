@@ -48,6 +48,7 @@
   "33ea3aeae409f196f087d3c3b9c7ce27",
   "36a03720c78f3c69043bdec22601a932",
   "39c082b20e27dc1c579b49d5067a8c73",
+  "39d21c9ca9d1ce90ea2e04e9639c340e",
   "3d4854401b3fb15cf97fb274eb361192",
   "3e0d688cdfccf7d01753621fa6884a3f",
   "3f3a1556b102fe36c3a87f08641a578c",
@@ -140,6 +141,7 @@
   "abdefe5a7bddccc73d92450fc5858a0a",
   "ad57e3e051b051db11468e0b6c0997a6",
   "ae074b17c6b25c35ad73b6a706773a5c",
+  "b181ef1ed98a722a2e0e7d37939ad60b",
   "b33ab54ee3d30fec9134d251e9042a88",
   "b498e165b175cfc73983d5a7656b091c",
   "b521a16d8eb13a8c6153a8d81b8556e3",
@@ -161,6 +163,7 @@
   "c051733876aed045a85e734657c4520f",
   "c10eab4fdb134c93e66b38b2746724a7",
   "c24ccf8c069649d65b469bdc9cd081c5",
+  "c2d560f2859507a7e0abd99e2db369d8",
   "c3a0912f0de52cac5fbe100cf269793e",
   "c3bfa6254ac92b4ecf34fa5713e49501",
   "c5a33e11d82326169a864abcce91c3ca",
@@ -241,6 +244,8 @@
   "contract_울산시청 용역입찰_R26BK01747899",
   "contract_울산시청 용역입찰_R26BK01751213",
   "contract_울산시청 용역입찰_R26BK01751310",
+  "contract_울산시청 용역입찰_R26BK01752669",
+  "contract_울산시청 용역입찰_R26BK01752811",
   "contract_울주군청 용역입찰_R26BK01565562",
   "contract_울주군청 용역입찰_R26BK01565655",
   "contract_울주군청 용역입찰_R26BK01566023",
@@ -1118,5 +1123,6 @@
   "spobiz_1678",
   "spobiz_1680",
   "spobiz_1684",
-  "spobiz_1691"
+  "spobiz_1691",
+  "spobiz_1696"
 ]
